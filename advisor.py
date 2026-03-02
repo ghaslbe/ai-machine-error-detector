@@ -41,7 +41,7 @@ def _load_env():
 _load_env()
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-LLM_MODEL      = "qwen/qwen3-30b-a3b"   # OpenRouter model ID
+LLM_MODEL      = "openai/gpt-oss-20b:free"   # OpenRouter model ID
 
 
 def _get_api_key() -> str:
@@ -407,9 +407,6 @@ Antworte ausschließlich auf Deutsch, keine englischen Begriffe. Präzise, praxi
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens":  LLM_MAX_TOKENS,
             "temperature": LLM_TEMPERATURE,
-            # Qwen3 supports "thinking mode" which returns content=null.
-            # Disable it via OpenRouter's reasoning control parameter.
-            "reasoning": {"enabled": False},
         }
         resp = requests.post(
             OPENROUTER_URL,
