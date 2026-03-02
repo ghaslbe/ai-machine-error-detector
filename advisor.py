@@ -405,6 +405,9 @@ Antworte auf Deutsch. Präzise, praxisorientiert, maximal 250 Wörter."""
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens":  LLM_MAX_TOKENS,
             "temperature": LLM_TEMPERATURE,
+            # Qwen3 supports "thinking mode" which returns content=null.
+            # Disable it via OpenRouter's reasoning control parameter.
+            "reasoning": {"enabled": False},
         }
         resp = requests.post(
             OPENROUTER_URL,
@@ -418,7 +421,15 @@ Antworte auf Deutsch. Präzise, praxisorientiert, maximal 250 Wörter."""
             timeout=45,
         )
         resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        data    = resp.json()
+        message = data["choices"][0]["message"]
+        # Qwen3 thinking-mode returns content=null; fall back to reasoning field
+        content = message.get("content") or message.get("reasoning") or ""
+        if not content:
+            raise ValueError(
+                f"Leere Antwort vom Modell. Rohantwort: {data}"
+            )
+        return content
 
     def _print_response(self, response: str, ts: int):
         model_short = self._model.split("/")[-1][:28]
