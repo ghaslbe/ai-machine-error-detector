@@ -25,6 +25,8 @@ Fünf physikalisch gekoppelte Sensoren werden in Echtzeit generiert:
 | `output` | Stück/min | Abhängig von Temp, Vibration, Feuchte (modenabhängig) |
 | `power_kw` | kW | Gekoppelt an Output, Temperaturlast und Reibungsverluste |
 
+![CNC Fräsmaschine mit eingebetteter Sensorik](cnc.png)
+
 Der Generator läuft nach einem festen **Demo-Schedule** mit 8 Anomalie-Phasen:
 
 | Schritte | Anomalie | Regelwerk | KI |
