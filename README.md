@@ -150,6 +150,102 @@ Ausgabe im Terminal:
 
 ---
 
+## Warum KI dem Regelwerk überlegen ist
+
+Ein klassisches regelbasiertes System prüft jeden Sensor einzeln gegen feste Grenzwerte –
+zum Beispiel: *„Alarm, wenn Vibration > 1,60 mm/s"*. Das funktioniert zuverlässig für
+offensichtliche Ausfälle, hat aber einen strukturellen Nachteil: Es sieht immer nur
+einen Kanal zur Zeit und weiß nichts über das Zusammenspiel der Sensoren.
+
+Industrielle Anomalien entstehen aber selten aus dem Nichts. Sie entwickeln sich langsam
+und zeigen sich zuerst als subtile Verschiebung im **Verhältnis** mehrerer Größen zueinander –
+lange bevor ein einzelner Wert seinen Grenzwert reißt.
+
+### KI-Stufe 1: Isolation Forest (scikit-learn + pandas)
+
+Der Isolation Forest lernt in einer Trainingsphase (300 Messwerte bei Normalbetrieb)
+wie sich die Maschine **typischerweise** verhält – nicht als einzelne Grenzwerte, sondern
+als hochdimensionale Normalverteilung über 70 berechnete Features.
+
+Was er dadurch erkennt, was das Regelwerk nicht kann:
+
+**Lagerverschleiß** – Die Vibration steigt über 70 Schritte um 0,54 mm/s an.
+Das Regelwerk hat eine Grenze bei 1,60 mm/s – die wird nie erreicht.
+Der Isolation Forest erkennt: Vibration *steigt systematisch*, gleichzeitig
+steigt der Energiebedarf pro produziertem Stück (`power / output`) und die
+Vibrations-Leistungs-Korrelation verändert sich. Kein Einzelsensor schlägt an –
+das multivariate Muster tut es.
+
+**Thermaldrift** – Die Temperatur driftet langsam 8 °C nach oben (Grenzwert: 82 °C,
+Istwert bleibt bei ~73 °C). Das Regelwerk schläft. Der Isolation Forest sieht den
+anhaltenden Aufwärtstrend im 30-Schritte-ROC und den beginnenden Output-Rückgang
+durch Wärmeausdehnung – und schlägt an.
+
+**Prozessänderung** – Alle Sensorwerte bleiben im Normalbereich. Die Grenzwerte
+sind nie in Gefahr. Aber: Die rollende Korrelation zwischen Luftfeuchtigkeit und
+Output (`corr_hum_out`) springt von nahezu null auf stark negativ – weil ein neues
+Material eingesetzt wurde, das feuchteempfindlich ist. Das Regelwerk hat keine
+Chance, das zu sehen. Der Isolation Forest erkennt die veränderte Struktur sofort.
+
+**Sensordrift** – Der Temperatursensor verstimmt sich um 4 °C. Der angezeigte Wert
+liegt bei ~69 °C, der echte Istwert bei ~65 °C. Kein Grenzwert verletzt.
+Der Isolation Forest erkennt den systematischen Temperaturtrend, während Leistung,
+Vibration und Output stabil bleiben – ein Muster, das fast ausschließlich
+auf einen Kalibrierungsfehler hindeutet.
+
+```
+Regelwerk:  prüft 5 Sensoren × 2 Grenzwerte = 10 Bedingungen
+KI:         lernt eine 70-dimensionale Normalverteilung –
+            erkennt Abweichungen im Raum der Beziehungen zwischen Sensoren
+```
+
+Das ist der Kernunterschied: Das Regelwerk reagiert auf **Zustände**.
+Die KI reagiert auf **Veränderungen im Verhalten** – auch dann, wenn alle
+Einzelwerte noch im grünen Bereich liegen.
+
+---
+
+### KI-Stufe 2: LLM-Advisor (Sprachmodell via OpenRouter)
+
+Der Isolation Forest meldet *dass* etwas nicht stimmt und *welche Features* auffällig sind.
+Er kann aber nicht sagen *warum* das wahrscheinlich passiert oder *was jetzt zu tun ist*.
+
+Hier kommt das Sprachmodell ins Spiel – und es löst ein anderes Problem als der
+Isolation Forest: Es überbrückt die Lücke zwischen Messwert und Handlung.
+
+Ein Wartungstechniker, der einen Alarm bekommt, braucht keine Sigma-Werte.
+Er braucht: *Was ist kaputt? Was soll ich jetzt tun? Wie dringend ist das?*
+
+Das LLM bekommt drei Dinge:
+
+1. **Den aktuellen Kontext** – Sensorwerte, KI-Diagnosetext, Regelverstoße
+2. **Den Verlauf der letzten 3 Minuten** – eine Timeline aller vorherigen
+   Alarm-Episoden aus dem SymptomTracker. So sieht das Modell nicht nur den
+   aktuellen Alarm, sondern auch, ob davor schon Vibrations- oder Temperaturprobleme
+   aufgefallen sind.
+3. **Vorgefiltertes Fachwissen** – aus der Wissensdatenbank werden automatisch die
+   passenden Einträge für die erkannten Symptomkombinationen ausgewählt und mitgegeben.
+
+Das Ergebnis ist kein generisches *„bitte einen Techniker rufen"*, sondern eine
+kontextbewusste Einschätzung: Das Modell sieht, dass in den letzten 3 Minuten
+bereits ein Lager- und ein Temperaturproblem aufgetreten sind, und kann daraus
+schließen, dass es sich wahrscheinlich um ein überhitztes Lager handelt – eine
+Diagnose, die weder der Isolation Forest noch das Regelwerk allein stellen könnten.
+
+```
+Regelwerk:   „Grenzwert überschritten"
+Isolation Forest:  „Multivariates Muster – Vibration + Effizienz auffällig"
+LLM-Advisor: „Wahrscheinlich überhitztes Lager. Sofortmaßnahmen:
+              1. IR-Thermometer an Lagerstelle, 2. Notschmierung,
+              3. Produktionstakt auf 70% reduzieren.
+              Dringlichkeit: sofort – Lagerausfall binnen 2h möglich."
+```
+
+Die drei Schichten ergänzen sich: Das Regelwerk fängt das Offensichtliche.
+Der Isolation Forest erkennt das Subtile. Das LLM macht daraus eine Handlung.
+
+---
+
 ## Schnellstart
 
 ### Voraussetzungen
