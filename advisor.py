@@ -349,7 +349,9 @@ class LLMAdvisor:
             else "Regelbasierte Grenzwerte: alle eingehalten"
         )
 
-        prompt = f"""Du bist ein erfahrener Industriemaschinen-Instandhaltungsexperte.
+        prompt = f"""WICHTIG: Antworte ausschließlich auf Deutsch. Keine englischen Wörter oder Sätze.
+
+Du bist ein erfahrener Industriemaschinen-Instandhaltungsexperte.
 Eine KI-Überwachung (Isolation Forest) meldet eine Anomalie an einer Produktionsmaschine.
 
 === AKTUELLE SENSORWERTE (Zeitschritt {current_ts}) ===
@@ -374,7 +376,7 @@ kompakte, praxisnahe Empfehlung in folgender Struktur:
 3. DRINGLICHKEIT: sofort / innerhalb 1h / innerhalb 8h – und warum?
 4. FOLGERISIKO: Was passiert, wenn nichts unternommen wird?
 
-Antworte auf Deutsch. Präzise, praxisorientiert, maximal 250 Wörter."""
+Antworte ausschließlich auf Deutsch, keine englischen Begriffe. Präzise, praxisorientiert, maximal 250 Wörter."""
         return prompt
 
     def _print_prompt(self, prompt: str, ts: int):
