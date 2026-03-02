@@ -60,14 +60,15 @@ def simulate_step(state: MachineState, mode: AnomalyMode) -> dict:
 
     # ── Anomaly injection into physical state ──────────────────────────────
     if mode == AnomalyMode.BEARING_WEAR:
-        # +0.009/step → peaks at 0.6 in ~67 steps; vibration max ≈ 0.92 mm/s (rule: 1.60)
-        state.vibration_health = min(state.vibration_health + 0.009, 0.6)
+        # +0.014/step → peaks at 1.1 in ~79 steps; vibration max ≈ 1.42 mm/s (rule: 1.60)
+        # Deliberately close to the rule threshold to create dramatic but still AI-only episodes.
+        state.vibration_health = min(state.vibration_health + 0.014, 1.1)
     elif mode == AnomalyMode.THERMAL_DRIFT:
-        # +0.20/step → fast setpoint drift, temp max ≈ 73°C with lag (rule: 82°C)
-        state.thermal_offset = min(state.thermal_offset + 0.20, 8.0)
+        # +0.30/step → temp max ≈ 79°C with lag (rule: 82°C) – visibly close to threshold
+        state.thermal_offset = min(state.thermal_offset + 0.30, 14.0)
     elif mode == AnomalyMode.SENSOR_DRIFT:
-        # +0.05/step → 3.5°C offset after 70 steps; roc30 ≈ 2.9σ detectable by AI
-        state.sensor_offset = min(state.sensor_offset + 0.05, 4.0)
+        # +0.09/step → 6°C offset after 67 steps; strong roc30 signal, clearly AI-detectable
+        state.sensor_offset = min(state.sensor_offset + 0.09, 6.0)
     elif mode == AnomalyMode.OVERHEAT:
         state.thermal_offset = 25.0   # forces temp well above 82°C rule threshold
     elif mode == AnomalyMode.NORMAL:
@@ -157,21 +158,25 @@ def _demo_schedule(step: int) -> AnomalyMode:
     (600 steps = 3 min) therefore spans 2–3 previous anomaly episodes.
     """
     if   step <  370: return AnomalyMode.NORMAL           # training: one full production cycle
-    elif step <  460: return AnomalyMode.BEARING_WEAR      # phase 1: vib_health peaks at 0.54
-    elif step <  570: return AnomalyMode.NORMAL            # recovery (110 steps)
-    elif step <  640: return AnomalyMode.THERMAL_DRIFT     # phase 2: subtle temp drift (AI only)
-    elif step <  750: return AnomalyMode.NORMAL            # recovery
-    elif step <  820: return AnomalyMode.OVERHEAT          # phase 3: hard – AI + rules both fire
+    elif step <  480: return AnomalyMode.BEARING_WEAR      # phase 1 – vib creeps to 1.42 mm/s
+    elif step <  580: return AnomalyMode.NORMAL            # recovery (100 steps)
+    elif step <  660: return AnomalyMode.THERMAL_DRIFT     # phase 2 – temp drifts to ~79 °C
+    elif step <  760: return AnomalyMode.NORMAL            # recovery
+    elif step <  830: return AnomalyMode.OVERHEAT          # phase 3 – temp > 82 °C, rules fire
     elif step <  930: return AnomalyMode.NORMAL            # recovery
-    elif step < 1050: return AnomalyMode.PROCESS_CHANGE    # phase 4: humidity-output coupling
+    elif step < 1060: return AnomalyMode.PROCESS_CHANGE    # phase 4 – humidity-output coupling
     elif step < 1160: return AnomalyMode.NORMAL            # recovery
-    elif step < 1240: return AnomalyMode.BEARING_WEAR      # phase 5: second bearing wear episode
-    elif step < 1350: return AnomalyMode.NORMAL            # recovery
-    elif step < 1420: return AnomalyMode.SENSOR_DRIFT      # phase 6: temp sensor drift (AI only)
-    elif step < 1530: return AnomalyMode.NORMAL            # recovery
-    elif step < 1610: return AnomalyMode.THERMAL_DRIFT     # phase 7: second thermal drift
-    elif step < 1720: return AnomalyMode.NORMAL            # recovery
-    elif step < 1820: return AnomalyMode.PROCESS_CHANGE    # phase 8: second process change
+    elif step < 1300: return AnomalyMode.BEARING_WEAR      # phase 5 – longer, vib at max 1.42
+    elif step < 1400: return AnomalyMode.NORMAL            # recovery
+    elif step < 1470: return AnomalyMode.SENSOR_DRIFT      # phase 6 – 6 °C sensor offset
+    elif step < 1570: return AnomalyMode.NORMAL            # recovery
+    elif step < 1660: return AnomalyMode.THERMAL_DRIFT     # phase 7 – second thermal drift
+    elif step < 1760: return AnomalyMode.NORMAL            # recovery
+    elif step < 1890: return AnomalyMode.PROCESS_CHANGE    # phase 8 – second process change
+    elif step < 1990: return AnomalyMode.NORMAL            # recovery
+    elif step < 2120: return AnomalyMode.BEARING_WEAR      # phase 9 – longest wear episode
+    elif step < 2220: return AnomalyMode.NORMAL            # recovery
+    elif step < 2290: return AnomalyMode.OVERHEAT          # phase 10 – second overheat
     else:             return AnomalyMode.NORMAL
 
 

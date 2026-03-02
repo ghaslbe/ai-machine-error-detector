@@ -243,9 +243,64 @@ class LLMAdvisor:
 
     # ── Interna ─────────────────────────────────────────────────────────────
 
+    def print_search_block(self, tracker: SymptomTracker, current_ts: int,
+                           event: SymptomEvent):
+        """
+        Gibt synchron aus, welche Symptom-Tags erkannt wurden und welche
+        KB-Einträge daraufhin ausgewählt wurden – noch vor dem LLM-Call.
+        """
+        combined_tags = list(set(event.tags + tracker.get_all_tags(current_ts)))
+        hist_only     = [t for t in tracker.get_all_tags(current_ts) if t not in event.tags]
+        kb_entries    = lookup(combined_tags)
+
+        print(f"\n\033[33m┌{LINE}┐\033[0m")
+        print(f"\033[33m│  🔍 WISSENSDATENBANK-SUCHE  [Schritt {current_ts}]"
+              f"{' ' * max(0, 64 - 36 - len(str(current_ts)))}│\033[0m")
+        print(f"\033[33m├{LINE}┤\033[0m")
+
+        # Aktuelle Tags
+        if event.tags:
+            print(f"\033[33m│  Aktuelle Symptom-Tags:{' ' * 41}│\033[0m")
+            for tag in event.tags[:6]:
+                label = SYMPTOM_LABELS.get(tag, tag)
+                line  = f"    • {tag:<22} {label}"
+                print(f"\033[33m│  {line:<62}│\033[0m")
+        else:
+            print(f"\033[33m│  Keine spezifischen Tags erkannt (multivariates Muster).{' ' * 7}│\033[0m")
+
+        # Tags nur aus Historie
+        if hist_only:
+            print(f"\033[33m│  Aus Symptom-Historie (letzte 3 min):{' ' * 25}│\033[0m")
+            for tag in hist_only[:4]:
+                label = SYMPTOM_LABELS.get(tag, tag)
+                line  = f"    + {tag:<22} {label}"
+                print(f"\033[33m│  {line:<62}│\033[0m")
+
+        print(f"\033[33m├{LINE}┤\033[0m")
+
+        # Gefundene KB-Einträge
+        if kb_entries:
+            print(f"\033[33m│  {len(kb_entries)} KB-Eintrag/Einträge gefunden (nach Dringlichkeit):"
+                  f"{' ' * max(0, 62 - 42 - len(str(len(kb_entries))))}│\033[0m")
+            for e in kb_entries[:5]:
+                emoji = URGENCY_EMOJI.get(e["urgency"], "•")
+                line  = f"  [{e['id']}] {emoji} {e['name']}"
+                line  = line[:62]
+                print(f"\033[33m│  {line:<62}│\033[0m")
+                tf = f"     → {e['timeframe']}"
+                print(f"\033[33m│  {tf:<62}│\033[0m")
+        else:
+            print(f"\033[33m│  Keine spezifischen KB-Einträge – generische Analyse.{' ' * 10}│\033[0m")
+
+        print(f"\033[33m│{' ' * 64}│\033[0m")
+        print(f"\033[33m│  ⏳ LLM-Anfrage läuft im Hintergrund …{' ' * 25}│\033[0m")
+        print(f"\033[33m└{LINE}┘\033[0m", flush=True)
+
     def _run(self, tracker: SymptomTracker, current_ts: int, event: SymptomEvent):
         try:
-            response = self._call_api(tracker, current_ts, event)
+            prompt   = self._build_prompt(tracker, current_ts, event)
+            self._print_prompt(prompt, current_ts)
+            response = self._send(prompt)
             self._print_response(response, current_ts)
         except requests.exceptions.Timeout:
             print(f"\n  [LLM-Advisor] Timeout – API hat nicht rechtzeitig geantwortet.\n")
@@ -322,9 +377,29 @@ kompakte, praxisnahe Empfehlung in folgender Struktur:
 Antworte auf Deutsch. Präzise, praxisorientiert, maximal 250 Wörter."""
         return prompt
 
-    def _call_api(self, tracker: SymptomTracker, current_ts: int,
-                  event: SymptomEvent) -> str:
-        prompt  = self._build_prompt(tracker, current_ts, event)
+    def _print_prompt(self, prompt: str, ts: int):
+        """Gibt den vollständigen LLM-Prompt als formatierten Kasten aus."""
+        print(f"\n\033[90m┌{LINE}┐\033[0m")
+        print(f"\033[90m│  📤 PROMPT AN LLM  [Schritt {ts}]"
+              f"{' ' * max(0, 64 - 30 - len(str(ts)))}│\033[0m")
+        print(f"\033[90m├{LINE}┤\033[0m")
+        for para in prompt.strip().split("\n"):
+            para = para.rstrip()
+            if not para:
+                print(f"\033[90m│{' ' * 64}│\033[0m")
+                continue
+            while len(para) > 62:
+                cut = para.rfind(" ", 0, 62)
+                if cut == -1:
+                    cut = 62
+                print(f"\033[90m│  {para[:cut]:<62}│\033[0m")
+                para = para[cut:].lstrip()
+            if para:
+                print(f"\033[90m│  {para:<62}│\033[0m")
+        print(f"\033[90m└{LINE}┘\033[0m", flush=True)
+
+    def _send(self, prompt: str) -> str:
+        """Sendet den fertigen Prompt an die OpenRouter-API und gibt die Antwort zurück."""
         payload = {
             "model":    self._model,
             "messages": [{"role": "user", "content": prompt}],

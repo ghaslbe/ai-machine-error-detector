@@ -609,8 +609,9 @@ def run_detector(stream_file: str):
             # Symptom-Verlauf der letzten 3 min ausgeben
             tracker.print_history_block(ts)
 
-            # LLM-Berater asynchron anfragen
+            # KB-Suche + Prompt synchron anzeigen, dann LLM asynchron anfragen
             if current_event is not None:
+                advisor.print_search_block(tracker, ts, current_event)
                 advisor.query_async(tracker, ts, current_event)
 
         elif any_alert and in_alert:
